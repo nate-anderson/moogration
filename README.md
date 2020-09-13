@@ -5,7 +5,7 @@ Simple MySQL migrations in Go. No dependencies, simple API, migration change det
 status tracking, and a cute cow.
 
 It might work with other SQL databases, but I haven't tried. I wrote this as part of another
-project and put it in this repo for my own convenience of re-use. I doubt it's ready for
+project and put it in this repo for my own convenience of reuse. I doubt it's ready for
 production.
 
 ## Defining migrations
