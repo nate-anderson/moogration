@@ -4,7 +4,7 @@ import (
 	"github.com/nate-anderson/moogration"
 )
 
-var usersTableMigration = moogration.Migration{
+var userTableMigration = moogration.Migration{
 	Name: "001_create_table_user",
 	Up: `CREATE TABLE user (
 		id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -15,6 +15,14 @@ var usersTableMigration = moogration.Migration{
 	Down: `DROP TABLE user;`
 }
 
+var postTableMigration = moogration.Migration{
+	Name: "002_create_table_post",
+	Up: `CREATE TABLE post (
+		...
+	);`,
+	Down: `DROP TABLE post;`,
+}
+
 func main() {
-	moogration.RegisterMigration(&usersTableMigration)
+	moogration.Register(&usersTableMigration, &postTableMigration)
 }

@@ -19,9 +19,9 @@ type Migration struct {
 
 var registeredMigrations = []*Migration{}
 
-// RegisterMigration registers a migration to be run by RunLatest
-func RegisterMigration(m *Migration) {
-	registeredMigrations = append(registeredMigrations, m)
+// Register registers a migration to be run by RunLatest
+func Register(m ...*Migration) {
+	registeredMigrations = append(registeredMigrations, m...)
 }
 
 // this table tracks migratipn statuses
