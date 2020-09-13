@@ -1,3 +1,4 @@
+![Moo the database cow](https://github.com/nate-anderson/moogration/blob/master/moo.jpg)
 # moogration
 Simple MySQL migrations in Go. No dependencies, simple API, migration change detection and
 status tracking, and a cute cow.
