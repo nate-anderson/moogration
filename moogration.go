@@ -29,6 +29,7 @@ const createMigrationTableSQL = `
 	CREATE TABLE IF NOT EXISTS migration (
 		id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
 		name VARCHAR(255),
+		batch int NOT NULL,
 		sql_hash VARCHAR(255),
 		migrated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
@@ -67,7 +68,7 @@ func (m Migration) migrationStatus(db *sql.DB) (hasRun, hasChanged bool) {
 	return
 }
 
-func (m Migration) setMigrationStatus(down bool, db *sql.DB) {
+func (m Migration) setMigrationStatus(down bool, db *sql.DB, batch int) {
 	if down {
 		stmt := "DELETE FROM migration WHERE name = ?"
 		_, err := db.Exec(stmt, m.Name)
@@ -77,8 +78,8 @@ func (m Migration) setMigrationStatus(down bool, db *sql.DB) {
 		}
 		return
 	}
-	stmt := "INSERT INTO migration (name, sql_hash) VALUES (?, ?)"
-	_, err := db.Exec(stmt, m.Name, m.hash())
+	stmt := "INSERT INTO migration (name, sql_hash, batch) VALUES (?, ?, ?)"
+	_, err := db.Exec(stmt, m.Name, m.hash(), batch)
 	if err != nil {
 		err = fmt.Errorf("error inserting migration record for migration '%s': %w", m.Name, err)
 		panic(err)
@@ -104,6 +105,88 @@ func (m Migration) run(down bool, db *sql.DB) {
 	}
 }
 
+// get the most recently run batch number
+func latestBatch(db *sql.DB) (batch int, err error) {
+	sqlSelectLatestBatch := `SELECT MAX(batch) FROM migration`
+	row := db.QueryRow(sqlSelectLatestBatch)
+	err = row.Scan(&batch)
+	return
+}
+
+// allBatches returns a slice of integer migration batch numbers, sorted descending
+func allBatches(db *sql.DB) ([]int, error) {
+	sqlSelectBatches := "SELECT DISTINCT batch FROM migration ORDER BY batch DESC"
+	batches := []int{}
+	rows, err := db.Query(sqlSelectBatches)
+	if err != nil {
+		return batches, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var batch int
+		err := rows.Scan(&batch)
+		if err != nil {
+			return batches, err
+		}
+		batches = append(batches, batch)
+	}
+
+	return batches, nil
+}
+
+// rollback a single identified migration batch. This function is intentionally left unexported,
+// because migrations should not be rolled back out of order
+func rollbackOneBatch(db *sql.DB, batchID int, force bool) error {
+	sqlGetMigrations := `SELECT name, sql_hash FROM migration WHERE batch = ?`
+	rows, err := db.Query(sqlGetMigrations, batchID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var name, sqlHash string
+		err := rows.Scan(&name, &sqlHash)
+		if err != nil {
+			return err
+		}
+
+		for _, migration := range registeredMigrations {
+			if migration.Name == name {
+				// validate that hash hasn't changed, permitting force
+				if force || migration.hash() == sqlHash {
+					// run down migration
+					migration.run(true, db)
+				} else {
+					err := fmt.Errorf("previously run migration '%s' has changed since run", migration.Name)
+					panic(err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// Rollback rolls the last n batches of migrations
+func Rollback(db *sql.DB, numBatches int, force bool) error {
+	batches, err := allBatches(db)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < (numBatches - 1); i++ {
+		batch := batches[i]
+		err := rollbackOneBatch(db, batch, force)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // RunLatest runs all migrations that have not been run since the last migration
 func RunLatest(db *sql.DB, down, force bool) {
 	// create migrations table if not exist
@@ -113,6 +196,14 @@ func RunLatest(db *sql.DB, down, force bool) {
 		err = fmt.Errorf("error running create migration table migration: %w", err)
 		panic(err)
 	}
+
+	lastBatch, err := latestBatch(db)
+	if err != nil {
+		err := fmt.Errorf("failed to determine last-run batch number")
+		panic(err)
+	}
+
+	currentBatch := lastBatch + 1
 
 	// sort migrations to run in order of creation
 	sort.Slice(registeredMigrations, func(i, j int) bool {
@@ -138,6 +229,6 @@ func RunLatest(db *sql.DB, down, force bool) {
 		}
 
 		m.run(down, db)
-		m.setMigrationStatus(down, db)
+		m.setMigrationStatus(down, db, currentBatch)
 	}
 }
