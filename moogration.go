@@ -204,7 +204,7 @@ func RunLatest(db *sql.DB, down, force bool) {
 
 	lastBatch, err := latestBatch(db)
 	if err != nil {
-		err := fmt.Errorf("failed to determine last-run batch number")
+		err := fmt.Errorf("failed to determine last-run batch number: %w", err)
 		panic(err)
 	}
 
