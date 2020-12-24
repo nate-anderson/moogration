@@ -113,6 +113,7 @@ func latestBatch(db *sql.DB) (batch int, err error) {
 	// if no migrations have run, latestBatch = 0
 	if err != sql.ErrNoRows {
 		batch = 0
+		err = nil
 	}
 	return
 }
