@@ -110,6 +110,10 @@ func latestBatch(db *sql.DB) (batch int, err error) {
 	sqlSelectLatestBatch := `SELECT MAX(batch) FROM migration`
 	row := db.QueryRow(sqlSelectLatestBatch)
 	err = row.Scan(&batch)
+	// if no migrations have run, latestBatch = 0
+	if err != sql.ErrNoRows {
+		batch = 0
+	}
 	return
 }
 
