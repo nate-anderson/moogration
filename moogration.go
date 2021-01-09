@@ -228,7 +228,7 @@ func RunLatest(db *sql.DB, down, force bool) {
 				err := fmt.Errorf("previously run migration '%s' has changed since run", m.Name)
 				panic(err)
 			}
-			if !force && !down {
+			if !force {
 				continue
 			}
 		}
