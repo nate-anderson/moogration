@@ -35,6 +35,19 @@ const createMigrationTableSQL = `
 	);
 `
 
+const dropMigrationTableSQL = `DROP TABLE IF EXISTS migration;`
+
+func createMigrationTable(db *sql.DB) error {
+	_, err := db.Exec(createMigrationTableSQL)
+	if err != nil {
+		// wrap error with some context
+		err = fmt.Errorf("error running create migration table migration: %w", err)
+		return err
+	}
+
+	return nil
+}
+
 // hashes are stored to safety check that migrations have not been edited
 // since they were run
 func (m Migration) hash() string {
@@ -194,11 +207,8 @@ func Rollback(db *sql.DB, numBatches int, force bool) error {
 
 // RunLatest runs all migrations that have not been run since the last migration
 func RunLatest(db *sql.DB, down, force bool) {
-	// create migrations table if not exist
-	_, err := db.Exec(createMigrationTableSQL)
+	err := createMigrationTable(db)
 	if err != nil {
-		// wrap error with some context
-		err = fmt.Errorf("error running create migration table migration: %w", err)
 		panic(err)
 	}
 
