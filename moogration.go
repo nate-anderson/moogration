@@ -100,22 +100,23 @@ func (m Migration) setMigrationStatus(down bool, db *sql.DB, batch int) {
 }
 
 // run a migration on the provided connection
-func (m Migration) run(down bool, db *sql.DB) {
+func (m Migration) run(down bool, db *sql.DB) error {
 	if down {
 		log.Printf("migrate :: DOWN :: %s", m.Name)
 		_, err := db.Exec(m.Down)
 		if err != nil {
 			err = fmt.Errorf("error running migration '%s' (DOWN): %w", m.Name, err)
-			panic(err)
+			return err
 		}
 	} else {
 		log.Printf("migrate :: UP :: %s", m.Name)
 		_, err := db.Exec(m.Up)
 		if err != nil {
 			err = fmt.Errorf("error running migration '%s' (UP): %w", m.Name, err)
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
 
 // get the most recently run batch number
@@ -234,16 +235,23 @@ func RunLatest(db *sql.DB, down, force bool) {
 		// check if migration has been run or changed
 		hasRun, hasChanged := m.migrationStatus(db)
 		if hasRun {
-			if hasChanged && !force {
-				err := fmt.Errorf("previously run migration '%s' has changed since run", m.Name)
-				panic(err)
-			}
-			if !force && !down {
-				continue
+			continue
+		}
+
+		if hasChanged {
+			if !force {
+				log.Printf("WARNING: migration '%s' has changed since last run - migrations should not be edited for live databases!", m.Name)
 			}
 		}
 
-		m.run(down, db)
+		err := m.run(down, db)
+		if err != nil {
+			if force {
+				log.Printf("ERROR: migration '%s' failed. '%s'", m.Name, err.Error())
+			} else {
+				panic(err)
+			}
+		}
 		m.setMigrationStatus(down, db, currentBatch)
 	}
 }
