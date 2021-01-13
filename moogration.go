@@ -116,6 +116,7 @@ func (m Migration) run(down bool, db *sql.DB) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
