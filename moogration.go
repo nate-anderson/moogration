@@ -232,10 +232,12 @@ func RunLatest(db *sql.DB, down, force bool) {
 
 	})
 
+	log.Printf("%d registered migrations", len(registeredMigrations))
+
 	for _, m := range registeredMigrations {
 		// check if migration has been run or changed
 		hasRun, hasChanged := m.migrationStatus(db)
-		if hasRun {
+		if hasRun && !down {
 			continue
 		}
 
