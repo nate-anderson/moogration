@@ -41,5 +41,7 @@ You can also roll back a specified number of migration batches with `moogration.
 
 Pass a `*log.Logger` to log migration status. Pass `nil` to silence migration logging.
 
+## Errors
+
 This package assumes that database migrations are application critical and thus panics upon
 encountering an error.
