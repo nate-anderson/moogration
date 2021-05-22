@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"os"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -84,6 +86,7 @@ func assertEquals(t *testing.T, exp interface{}, actual interface{}) {
 
 func TestMigrationStatus(t *testing.T) {
 	db := getTestDB(t)
+	testLogger := log.New(os.Stdout, "", log.Flags())
 
 	testMigration := &Migration{
 		Name: "001_test_migration",
@@ -100,7 +103,7 @@ func TestMigrationStatus(t *testing.T) {
 	assertEquals(t, false, hasChanged)
 
 	// run migration, check that hasRun flips
-	testMigration.run(false, db)
+	testMigration.run(false, db, testLogger)
 
 	hasRun, hasChanged = testMigration.migrationStatus(db)
 	assertEquals(t, true, hasRun)
@@ -114,7 +117,7 @@ func TestMigrationStatus(t *testing.T) {
 	assertEquals(t, true, hasChanged)
 
 	// run down migration
-	testMigration.run(true, db)
+	testMigration.run(true, db, testLogger)
 	hasRun, hasChanged = testMigration.migrationStatus(db)
 	assertEquals(t, false, hasRun)
 }

@@ -100,16 +100,20 @@ func (m Migration) setMigrationStatus(down bool, db *sql.DB, batch int) {
 }
 
 // run a migration on the provided connection
-func (m Migration) run(down bool, db *sql.DB) error {
+func (m Migration) run(down bool, db *sql.DB, logger *log.Logger) error {
 	if down {
-		log.Printf("migrate :: DOWN :: %s", m.Name)
+		if logger != nil {
+			logger.Printf("migrate :: DOWN :: %s", m.Name)
+		}
 		_, err := db.Exec(m.Down)
 		if err != nil {
 			err = fmt.Errorf("error running migration '%s' (DOWN): %w", m.Name, err)
 			return err
 		}
 	} else {
-		log.Printf("migrate :: UP :: %s", m.Name)
+		if logger != nil {
+			logger.Printf("migrate :: UP :: %s", m.Name)
+		}
 		_, err := db.Exec(m.Up)
 		if err != nil {
 			err = fmt.Errorf("error running migration '%s' (UP): %w", m.Name, err)
@@ -157,7 +161,7 @@ func allBatches(db *sql.DB) ([]int, error) {
 
 // rollback a single identified migration batch. This function is intentionally left unexported,
 // because migrations should not be rolled back out of order
-func rollbackOneBatch(db *sql.DB, batchID int, force bool) error {
+func rollbackOneBatch(db *sql.DB, batchID int, force bool, logger *log.Logger) error {
 	sqlGetMigrations := `SELECT name, sql_hash FROM migration WHERE batch = ?`
 	rows, err := db.Query(sqlGetMigrations, batchID)
 	if err != nil {
@@ -177,7 +181,7 @@ func rollbackOneBatch(db *sql.DB, batchID int, force bool) error {
 				// validate that hash hasn't changed, permitting force
 				if force || migration.hash() == sqlHash {
 					// run down migration
-					migration.run(true, db)
+					migration.run(true, db, logger)
 				} else {
 					err := fmt.Errorf("previously run migration '%s' has changed since run", migration.Name)
 					panic(err)
@@ -190,7 +194,7 @@ func rollbackOneBatch(db *sql.DB, batchID int, force bool) error {
 }
 
 // Rollback rolls the last n batches of migrations
-func Rollback(db *sql.DB, numBatches int, force bool) error {
+func Rollback(db *sql.DB, numBatches int, force bool, logger *log.Logger) error {
 	batches, err := allBatches(db)
 	if err != nil {
 		return err
@@ -198,7 +202,7 @@ func Rollback(db *sql.DB, numBatches int, force bool) error {
 
 	for i := 0; i < (numBatches - 1); i++ {
 		batch := batches[i]
-		err := rollbackOneBatch(db, batch, force)
+		err := rollbackOneBatch(db, batch, force, logger)
 		if err != nil {
 			return err
 		}
@@ -208,7 +212,7 @@ func Rollback(db *sql.DB, numBatches int, force bool) error {
 }
 
 // RunLatest runs all migrations that have not been run since the last migration
-func RunLatest(db *sql.DB, down, force bool) {
+func RunLatest(db *sql.DB, down, force bool, logger *log.Logger) {
 	err := createMigrationTable(db)
 	if err != nil {
 		panic(err)
@@ -232,7 +236,9 @@ func RunLatest(db *sql.DB, down, force bool) {
 
 	})
 
-	log.Printf("%d registered migrations", len(registeredMigrations))
+	if logger != nil {
+		logger.Printf("%d registered migrations", len(registeredMigrations))
+	}
 
 	for _, m := range registeredMigrations {
 		// check if migration has been run or changed
@@ -243,14 +249,18 @@ func RunLatest(db *sql.DB, down, force bool) {
 
 		if hasChanged {
 			if !force {
-				log.Printf("WARNING: migration '%s' has changed since last run - migrations should not be edited for live databases!", m.Name)
+				if logger != nil {
+					logger.Printf("WARNING: migration '%s' has changed since last run - migrations should not be edited for live databases!", m.Name)
+				}
 			}
 		}
 
-		err := m.run(down, db)
+		err := m.run(down, db, logger)
 		if err != nil {
 			if force {
-				log.Printf("ERROR: migration '%s' failed. '%s'", m.Name, err.Error())
+				if logger != nil {
+					logger.Printf("ERROR: migration '%s' failed. '%s'", m.Name, err.Error())
+				}
 			} else {
 				panic(err)
 			}
