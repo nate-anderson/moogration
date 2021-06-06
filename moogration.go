@@ -125,16 +125,17 @@ func (m Migration) run(down bool, db *sql.DB, logger *log.Logger) error {
 }
 
 // get the most recently run batch number
-func latestBatch(db *sql.DB) (batch int, err error) {
+func latestBatch(db *sql.DB) (int, error) {
+	batch := 0
 	sqlSelectLatestBatch := `SELECT MAX(batch) FROM migration`
 	row := db.QueryRow(sqlSelectLatestBatch)
-	err = row.Scan(&batch)
+	err := row.Scan(&batch)
 	// if no migrations have run, latestBatch = 0
 	if err != sql.ErrNoRows {
 		batch = 0
 		err = nil
 	}
-	return
+	return batch, err
 }
 
 // allBatches returns a slice of integer migration batch numbers, sorted descending
