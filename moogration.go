@@ -131,9 +131,14 @@ func latestBatch(db *sql.DB) (int, error) {
 	row := db.QueryRow(sqlSelectLatestBatch)
 	err := row.Scan(&batch)
 	// if no migrations have run, latestBatch = 0
-	if err != sql.ErrNoRows {
-		batch = 0
-		err = nil
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.Println("No batches")
+			batch = 0
+			err = nil
+		} else {
+			return 0, err
+		}
 	}
 	return batch, err
 }

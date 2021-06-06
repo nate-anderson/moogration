@@ -20,24 +20,47 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
+	"runtime"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
 // instantiate a DB connection using test config, and create the migration table
-func getTestDB(t *testing.T) *sql.DB {
+func getTestDB(t *testing.T) (*sql.DB, func()) {
 	conf := make(map[string]string, 5)
 	confBytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
-		t.Log("failed reading config.json")
+		t.Log("failed reading config.json", err)
 		t.FailNow()
 	}
 
 	err = json.Unmarshal(confBytes, &conf)
 	if err != nil {
-		t.Log("failed parsing configuration json")
+		t.Log("failed parsing configuration json", err)
+		t.FailNow()
+	}
+
+	// create DB if not exists
+	noDBConnString := fmt.Sprintf(
+		"%s:%s@tcp(%s:%s)/",
+		conf["dbUser"],
+		conf["dbPass"],
+		conf["dbHost"],
+		conf["dbPort"],
+	)
+
+	noDBConn, err := sql.Open("mysql", noDBConnString)
+	if err != nil {
+		t.Log("failed connecting to DB for initial setup", err)
+		t.FailNow()
+	}
+	defer noDBConn.Close()
+
+	sqlCreate := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", conf["dbName"])
+	_, err = noDBConn.Exec(sqlCreate)
+	if err != nil {
+		t.Log("failed creating test database")
 		t.FailNow()
 	}
 
@@ -52,28 +75,47 @@ func getTestDB(t *testing.T) *sql.DB {
 
 	conn, err := sql.Open("mysql", connString)
 	if err != nil {
-		t.Log("failed connecting to configured database")
+		t.Log("failed connecting to configured database", err)
 		t.FailNow()
 	}
 
 	err = createMigrationTable(conn)
 	if err != nil {
-		t.Log("failed creating migration table")
+		t.Log("failed creating migration table", err)
 		t.FailNow()
 	}
 
-	return conn
+	teardown := func() {
+		sqlDrop := fmt.Sprintf("DROP DATABASE IF EXISTS %s", conf["dbName"])
+		conn.Exec(sqlDrop)
+	}
+
+	return conn, teardown
 }
 
 func assertOk(t *testing.T, err error) {
 	if err != nil {
 		t.Logf("Unexpected error in test: %s", err.Error())
-		t.Fail()
+		t.FailNow()
 	}
 }
 
+const assertionStackFrames = 3
+
 func assertEquals(t *testing.T, exp interface{}, actual interface{}) {
 	if exp != actual {
+		stack := make([]uintptr, assertionStackFrames)
+		stackTrace := ""
+		_ = runtime.Callers(1, stack)
+		for _, frame := range stack {
+			fn := runtime.FuncForPC(frame)
+			if fn == nil {
+				break
+			}
+			file, line := fn.FileLine(frame)
+			stackTrace += fmt.Sprintf("\n[%s] %s:%d", fn.Name(), file, line)
+		}
+
 		t.Logf(
 			"Assertion failed:\nexpected %v (type %T)\ngot %v (type %T)",
 			exp,
@@ -81,12 +123,14 @@ func assertEquals(t *testing.T, exp interface{}, actual interface{}) {
 			actual,
 			actual,
 		)
+		t.Log(stackTrace)
+		t.FailNow()
 	}
 }
 
 func TestMigrationStatus(t *testing.T) {
-	db := getTestDB(t)
-	testLogger := log.New(os.Stdout, "", log.Flags())
+	db, teardown := getTestDB(t)
+	defer teardown()
 
 	testMigration := &Migration{
 		Name: "001_test_migration",
@@ -102,8 +146,8 @@ func TestMigrationStatus(t *testing.T) {
 	assertEquals(t, false, hasRun)
 	assertEquals(t, false, hasChanged)
 
-	// run migration, check that hasRun flips
-	testMigration.run(false, db, testLogger)
+	Register(testMigration)
+	RunLatest(db, false, false, log.Default())
 
 	hasRun, hasChanged = testMigration.migrationStatus(db)
 	assertEquals(t, true, hasRun)
@@ -117,7 +161,33 @@ func TestMigrationStatus(t *testing.T) {
 	assertEquals(t, true, hasChanged)
 
 	// run down migration
-	testMigration.run(true, db, testLogger)
+	RunLatest(db, true, false, log.Default())
 	hasRun, hasChanged = testMigration.migrationStatus(db)
 	assertEquals(t, false, hasRun)
+}
+
+func TestMigrationLatestBatch(t *testing.T) {
+	db, teardown := getTestDB(t)
+	defer teardown()
+	initialLatestBatch, err := latestBatch(db)
+	assertOk(t, err)
+	assertEquals(t, 0, initialLatestBatch)
+
+	testMigration := &Migration{
+		Name: "001_test_migration",
+		Up: `CREATE TABLE IF NOT EXISTS test_table (
+				id int UNSIGNED NOT NULL AUTO_INCREMENT,
+				string VARCHAR(255),
+				PRIMARY KEY (id)
+			);`,
+		Down: `DROP TABLE IF EXISTS test_table;`,
+	}
+
+	Register(testMigration)
+
+	RunLatest(db, false, false, log.Default())
+
+	afterLatestBatch, err := latestBatch(db)
+	assertOk(t, err)
+	assertEquals(t, 1, afterLatestBatch)
 }
