@@ -182,17 +182,29 @@ func rollbackOneBatch(db *sql.DB, batchID int, force bool, logger *log.Logger) e
 			return err
 		}
 
+		migrationFound := false
+
 		for _, migration := range registeredMigrations {
 			if migration.Name == name {
+				migrationFound = true
 				// validate that hash hasn't changed, permitting force
 				if force || migration.hash() == sqlHash {
 					// run down migration
-					migration.run(true, db, logger)
+					err = migration.run(true, db, logger)
+					if err != nil {
+						panic(err)
+					}
+
+					migration.setMigrationStatus(true, db, batchID)
 				} else {
 					err := fmt.Errorf("previously run migration '%s' has changed since run", migration.Name)
 					panic(err)
 				}
 			}
+		}
+
+		if !migrationFound {
+			log.Printf("could not roll back migration %s: not found\n", name)
 		}
 	}
 
@@ -206,7 +218,7 @@ func Rollback(db *sql.DB, numBatches int, force bool, logger *log.Logger) error 
 		return err
 	}
 
-	for i := 0; i < (numBatches - 1); i++ {
+	for i := 0; i < numBatches; i++ {
 		batch := batches[i]
 		err := rollbackOneBatch(db, batch, force, logger)
 		if err != nil {
