@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"time"
 )
 
 // Migration contains the up and down SQL of a migration, as well as a name.
@@ -24,8 +25,27 @@ func Register(m ...*Migration) {
 	registeredMigrations = append(registeredMigrations, m...)
 }
 
+type driver string
+
+const (
+	sqlite driver = "sqlite"
+	mysql  driver = "mysql"
+)
+
+var selectedDriver driver
+
+// UseSQLite sets the package's mode to SQLite
+func UseSQLite() {
+	selectedDriver = sqlite
+}
+
+// UseMySQL sets the package's mode to MySQL
+func UseMySQL() {
+	selectedDriver = mysql
+}
+
 // this table tracks migratipn statuses
-const createMigrationTableSQL = `
+const createMigrationTableMySQL = `
 	CREATE TABLE IF NOT EXISTS migration (
 		id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
 		name VARCHAR(255),
@@ -35,9 +55,28 @@ const createMigrationTableSQL = `
 	);
 `
 
+const createMigrationTableSQLite = `
+	CREATE TABLE IF NOT EXISTS migration (
+		id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+		name TEXT,
+		batch INTEGER NOT NULL,
+		sql_hash TEXT,
+		migrated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+`
+
 const dropMigrationTableSQL = `DROP TABLE IF EXISTS migration;`
 
 func createMigrationTable(db *sql.DB) error {
+	var createMigrationTableSQL string
+	switch selectedDriver {
+	case mysql:
+		createMigrationTableSQL = createMigrationTableMySQL
+	case sqlite:
+		createMigrationTableSQL = createMigrationTableSQLite
+	default:
+		return fmt.Errorf("configured driver unknown: \"%s\"", selectedDriver)
+	}
 	_, err := db.Exec(createMigrationTableSQL)
 	if err != nil {
 		// wrap error with some context
@@ -222,6 +261,9 @@ func Rollback(db *sql.DB, numBatches int, force bool, logger *log.Logger) error 
 		err := rollbackOneBatch(db, batch, force, logger)
 		if err != nil {
 			return err
+		}
+		if selectedDriver == sqlite {
+			time.Sleep(time.Second)
 		}
 	}
 
