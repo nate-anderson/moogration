@@ -100,7 +100,7 @@ func assertOk(t *testing.T, err error) {
 
 const assertionStackFrames = 3
 
-func assertEquals(t *testing.T, exp interface{}, actual interface{}) {
+func assertEquals[T comparable](t *testing.T, exp T, actual T) {
 	if exp != actual {
 		stack := make([]uintptr, assertionStackFrames)
 		stackTrace := ""
