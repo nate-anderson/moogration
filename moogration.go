@@ -18,11 +18,15 @@ type Migration struct {
 	Name string
 }
 
-var registeredMigrations = []*Migration{}
+var registeredMigrations = []Migration{}
 
 // Register registers a migration to be run by RunLatest
-func Register(m ...*Migration) {
+func Register(m ...Migration) {
 	registeredMigrations = append(registeredMigrations, m...)
+}
+
+func RegisteredMigrations() []Migration {
+	return registeredMigrations
 }
 
 type driver string
@@ -64,8 +68,6 @@ const createMigrationTableSQLite = `
 		migrated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 `
-
-const dropMigrationTableSQL = `DROP TABLE IF EXISTS migration;`
 
 func createMigrationTable(db *sql.DB) error {
 	var createMigrationTableSQL string

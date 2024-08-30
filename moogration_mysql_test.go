@@ -11,7 +11,7 @@ func TestMigrationStatus(t *testing.T) {
 	db, teardown := getTestMySQLDB(t)
 	defer teardown()
 
-	testMigration := &Migration{
+	testMigration := Migration{
 		Name: "001_test_migration",
 		Up: `CREATE TABLE IF NOT EXISTS test_table (
 			id int UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -43,6 +43,7 @@ func TestMigrationStatus(t *testing.T) {
 	RunLatest(db, true, false, log.Default())
 	hasRun, hasChanged = testMigration.migrationStatus(db)
 	assertEquals(t, false, hasRun)
+	assertEquals(t, false, hasChanged)
 }
 
 func TestMySQLMigrationLatestBatch(t *testing.T) {
@@ -52,7 +53,7 @@ func TestMySQLMigrationLatestBatch(t *testing.T) {
 	assertOk(t, err)
 	assertEquals(t, 0, initialLatestBatch)
 
-	testMigration := &Migration{
+	testMigration := Migration{
 		Name: "001_test_migration",
 		Up: `CREATE TABLE IF NOT EXISTS test_table (
 				id int UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -75,7 +76,7 @@ func TestMySQLRollback(t *testing.T) {
 	db, teardown := getTestMySQLDB(t)
 	defer teardown()
 
-	testMigration1 := &Migration{
+	testMigration1 := Migration{
 		Name: "001_test_migration1",
 		Up: `CREATE TABLE IF NOT EXISTS test_table1 (
 				id int UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -85,7 +86,7 @@ func TestMySQLRollback(t *testing.T) {
 		Down: `DROP TABLE IF EXISTS test_table1;`,
 	}
 
-	testMigration2 := &Migration{
+	testMigration2 := Migration{
 		Name: "002_test_migration2",
 		Up: `CREATE TABLE IF NOT EXISTS test_table2 (
 				id int UNSIGNED NOT NULL AUTO_INCREMENT,

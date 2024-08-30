@@ -71,7 +71,7 @@ func TestSQLiteMigrationStatus(t *testing.T) {
 	db, teardown := getTestSQLiteDB(t, "migration_status_test")
 	defer teardown()
 
-	testMigration := &Migration{
+	testMigration := Migration{
 		Name: "001_test_migration",
 		Up: `CREATE TABLE IF NOT EXISTS test_table (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +102,7 @@ func TestSQLiteMigrationStatus(t *testing.T) {
 	RunLatest(db, true, false, log.Default())
 	hasRun, hasChanged = testMigration.migrationStatus(db)
 	assertEquals(t, false, hasRun)
+	assertEquals(t, false, hasChanged)
 }
 
 func TestMigrationLatestBatch(t *testing.T) {
@@ -111,7 +112,7 @@ func TestMigrationLatestBatch(t *testing.T) {
 	assertOk(t, err)
 	assertEquals(t, 0, initialLatestBatch)
 
-	testMigration := &Migration{
+	testMigration := Migration{
 		Name: "001_test_migration",
 		Up: `CREATE TABLE IF NOT EXISTS test_table (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,7 +134,7 @@ func TestSQLiteRollback(t *testing.T) {
 	db, teardown := getTestSQLiteDB(t, "rollback_test")
 	defer teardown()
 
-	testMigration1 := &Migration{
+	testMigration1 := Migration{
 		Name: "001_test_migration1",
 		Up: `CREATE TABLE IF NOT EXISTS test_table1 (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,7 +143,7 @@ func TestSQLiteRollback(t *testing.T) {
 		Down: `DROP TABLE IF EXISTS test_table1;`,
 	}
 
-	testMigration2 := &Migration{
+	testMigration2 := Migration{
 		Name: "002_test_migration2",
 		Up: `CREATE TABLE IF NOT EXISTS test_table2 (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
